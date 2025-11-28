@@ -1,0 +1,74 @@
+//
+// Database schema for a workflow management system
+//
+
+// Main table to define workflows
+Table workflows {
+  id int [pk, increment]
+  name varchar(255) [not null]
+  description text
+  workflow_step_id int [not null, ref: > workflow_steps.id]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+}
+
+// Junction table to link workflows and steps
+Table workflow_steps {
+  id int [increment]
+  workflow_id int [not null, ref: > workflows.id]
+  step_id int [not null, ref: > steps.id]
+  assignee_ids int[] [not null, ref: > users.id]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  indexes {
+    (workflow_id, step_id) [pk]
+  }
+}
+
+// Table to define individual steps in a workflow
+Table steps {
+  id int [pk, increment]
+  name varchar(255) [not null]
+  completion_rule_ids int[] [ref: <> completion_rules.id]
+  workflow_id int [not null, ref: > workflows.id]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+}
+
+// Table to store responses for each step
+Table responses {
+  id int [pk, increment]
+  step_id int [not null, ref: > steps.id]
+  responder_id int [not null, ref: > users.id]
+  description text
+  file_attachments jsonb
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+}
+
+// Table to define rules for step completion
+Table completion_rules {
+  id int [pk, increment]
+  rule_type varchar(50) [not null] // e.g., 'all_assignees', 'any_assignee', 'custom'
+  parameters jsonb
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+}
+
+// Table to store user information
+Table users {
+  id int [pk, increment]
+  name varchar(255) [not null]
+  email varchar(255) [not null, unique]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+}
+
+// Table to log history of actions taken on steps
+Table history {
+  id int [pk, increment]
+  step_id int [not null, ref: > steps.id]
+  action varchar(255) [not null]
+  created_by int [not null, ref: > users.id]
+  created_at timestamp [default: `now()`]
+}
