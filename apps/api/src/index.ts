@@ -1,6 +1,6 @@
 import express from 'express';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
-import { appRouter } from '@repo/api/src/router.js';
+import { appRouter } from '@repo/api/src/router';
 
 const app = express();
 const port = 3000;
@@ -10,7 +10,7 @@ app.get('/', (req, res) => {
 });
 
 app.use(
-  '/api',
+  '/api/trpc',
   createExpressMiddleware({
     router: appRouter,
   })

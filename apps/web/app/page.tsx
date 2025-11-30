@@ -1,4 +1,7 @@
+'use client';
+
 import Image from "next/image";
+import { trpcNext } from "@repo/client/src/trpc";
 import { Card } from "@repo/ui/card";
 import { Gradient } from "@repo/ui/gradient";
 import { TurborepoLogo } from "@repo/ui/turborepo-logo";
@@ -27,9 +30,34 @@ const LINKS = [
   },
 ];
 
+function QueryExample() {
+  // 💡 Tip: CMD+Click (or CTRL+Click) on `greeting` to go to the server definition
+  const result = trpcNext.greeting.useQuery({ name: "Preston" });
+
+  if (!result.data) {
+    return (
+      <div>
+        <h1>Loading...</h1>
+      </div>
+    );
+  }
+  return (
+    <div>
+      {/**
+       * The type is defined and can be autocompleted
+       * 💡 Tip: Hover over `data` to see the result type
+       * 💡 Tip: CMD+Click (or CTRL+Click) on `text` to go to the server definition
+       * 💡 Tip: Secondary click on `text` and "Rename Symbol" to rename it both on the client & server
+       */}
+      <h1>{result.data.text}</h1>
+    </div>
+  );
+}
+
 export default function Page() {
   return (
     <main className="flex flex-col items-center justify-between min-h-screen p-24">
+      <QueryExample />
       <div className="z-10 items-center justify-between w-full max-w-5xl font-mono text-sm lg:flex">
         <p className="fixed top-0 left-0 flex justify-center w-full px-4 pt-8 pb-6 border backdrop-blur-2xl border-neutral-800 from-inherit lg:static lg:w-auto lg:rounded-xl lg:p-4">
           examples/with-tailwind -&nbsp;
@@ -56,7 +84,7 @@ export default function Page() {
       </div>
 
       <div className="relative flex place-items-center ">
-        <div className="font-sans w-auto pb-16 pt-[48px] md:pb-24 lg:pb-32 md:pt-16 lg:pt-20 flex justify-between gap-8 items-center flex-col relative z-0">
+        <div className="font-sans w-auto pb-16 pt-12 md:pb-24 lg:pb-32 md:pt-16 lg:pt-20 flex justify-between gap-8 items-center flex-col relative z-0">
           <div className="z-50 flex items-center justify-center w-full">
             <div className="absolute min-w-[614px] min-h-[614px]">
               <Image
@@ -84,7 +112,7 @@ export default function Page() {
           />
           <div className="z-50 flex flex-col items-center justify-center gap-5 px-6 text-center lg:gap-6">
             <svg
-              className="w-[160px] md:w-[200px] fill-black dark:fill-white"
+              className="w-40 md:w-[200px] fill-black dark:fill-white"
               viewBox="0 0 506 50"
               width={200}
               xmlns="http://www.w3.org/2000/svg"

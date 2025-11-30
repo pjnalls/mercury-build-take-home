@@ -1,0 +1,25 @@
+{
+  "name": "@repo/client",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.19.0",
+  "dependencies": {
+    "@repo/api": "workspace:*",
+    "@tanstack/react-query": "^5.90.11",
+    "@trpc/client": "^11.7.2",
+    "@trpc/next": "^11.7.2",
+    "@trpc/react-query": "^11.7.2",
+    "@trpc/tanstack-react-query": "^11.7.2",
+    "superjson": "^2.2.6"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

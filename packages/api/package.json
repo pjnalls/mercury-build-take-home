@@ -2,10 +2,11 @@
   "name": "@repo/api",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "src/index.ts",
   "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc",
+    "dev": "tsc --watch"
   },
   "keywords": [],
   "author": "",
@@ -14,10 +15,10 @@
   "dependencies": {
     "@repo/db": "workspace:*",
     "@trpc/server": "^11.7.2",
-    "superjson": "^2.2.6",
-    "zod": "^4.1.13"
+    "superjson": "^2.2.6"
   },
   "devDependencies": {
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "zod": "^4.1.13"
   }
 }

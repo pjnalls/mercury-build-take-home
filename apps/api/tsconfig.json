@@ -7,7 +7,7 @@
 
     // Environment Settings
     // See also https://aka.ms/tsconfig/module
-    "module": "nodenext",
+    "module": "esnext",
     "target": "esnext",
     "types": [],
     // For nodejs:
@@ -40,5 +40,14 @@
     "noUncheckedSideEffectImports": true,
     "moduleDetection": "force",
     "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "paths": {
+      "@repo/api": ["../../packages/api/src/index.ts"],
+      "@repo/api/*": ["../../packages/api/src/*"],
+      "@repo/client": ["../../packages/client/src/index.ts"],
+      "@repo/client/*": ["../../packages/client/src/*"],
+    }
   }
 }
