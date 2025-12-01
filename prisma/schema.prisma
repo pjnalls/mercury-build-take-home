@@ -1,23 +1,191 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-datasource db {
-  provider = "postgres"
-  url      = env("DATABASE_URL")
-}
-
+// Using SQLite for the database provider
 generator client {
   provider = "prisma-client-js"
 }
 
-model Post {
-  id    String @id @default(uuid())
-  title String
-  text  String
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
 
-  // To return `Date`s intact through the API we use transformers
-  // https://trpc.io/docs/v11/data-transformers
-  // This is unique so it can be used for cursor-based pagination
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
+// --- Enums ---
+
+enum RuleEnum {
+  ALL
+  ANY
+  K_OF_N
+}
+
+enum ResponseEnum {
+  POSITIVE
+  NEGATIVE
+}
+
+enum WorkflowStatusEnum {
+  IN_PROGRESS
+  COMPLETED
+  CANCELED
+}
+
+enum HistoryEventEnum {
+  WORKFLOW_STARTED
+  STEP_ADVANCED
+  STEP_SENT_BACK
+  WORKFLOW_COMPLETED
+}
+
+// --- Models ---
+
+/// Table to store user information
+model User {
+  id               Int      @id @default(autoincrement())
+  name             String
+  email            String   @unique
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
+
+  // Relations
+  templateStepAssignees TemplateStepAssignee[]
+  workflowAssignees     WorkflowAssignee[]
+  responses             Response[]
+}
+
+/// Main table to define **Workflow Templates**
+model WorkflowTemplate {
+  id               Int      @id @default(autoincrement())
+  name             String
+  description      String? // DBML 'text' is just 'String' in Prisma for SQLite, optional
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
+
+  // Relations
+  templateSteps TemplateStep[]
+  workflows     Workflow[]
+}
+
+/// Defines the **Ordered Steps** for a specific **Workflow Template**
+model TemplateStep {
+  id                   Int          @id @default(autoincrement())
+  workflowTemplateId   Int
+  stepName             String
+  stepOrder            Int
+  metadata             Json? // 'json' field is handled by the 'Json' type in Prisma, which maps to String in SQLite
+  completionRuleType   RuleEnum
+  kValue               Int?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @default(now()) @updatedAt
+
+  // Relations
+  workflowTemplate WorkflowTemplate @relation(fields: [workflowTemplateId], references: [id])
+  templateStepAssignees TemplateStepAssignee[]
+  workflowAssignees     WorkflowAssignee[]
+  responses             Response[]
+  history              History[]
+
+  @@unique([workflowTemplateId, stepOrder])
+  @@map("template_steps")
+}
+
+/// Defines the allowed **Assignee Roles/Groups** for a Step in a Template
+model TemplateStepAssignee {
+  templateStepId   Int
+  userId           Int
+  createdAt        DateTime @default(now())
+
+  // Relations
+  templateStep TemplateStep @relation(fields: [templateStepId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@id([templateStepId, userId])
+  @@map("template_step_assignees")
+}
+
+/// **Instances** of workflows being executed
+model Workflow {
+  id                   Int                  @id @default(autoincrement())
+  workflowTemplateId   Int
+  currentStepOrder     Int                  @default(1)
+  status               WorkflowStatusEnum
+  startedAt            DateTime             @default(now())
+  completedAt          DateTime?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @default(now()) @updatedAt
+
+  // Relations
+  workflowTemplate WorkflowTemplate @relation(fields: [workflowTemplateId], references: [id])
+  workflowAssignees WorkflowAssignee[]
+  responses         Response[]
+  history           History[]
+
+  @@map("workflows")
+}
+
+/// Tracks the **Specific Assignees** for an **Active Workflow Instance** and its **Current Step**
+model WorkflowAssignee {
+  workflowId       Int
+  templateStepId   Int
+  assigneeUserId   Int
+  createdAt        DateTime @default(now())
+
+  // Relations
+  workflow     Workflow     @relation(fields: [workflowId], references: [id])
+  templateStep TemplateStep @relation(fields: [templateStepId], references: [id])
+  assigneeUser User         @relation(fields: [assigneeUserId], references: [id])
+
+  @@id([workflowId, templateStepId, assigneeUserId])
+  @@index([workflowId, templateStepId])
+  @@map("workflow_assignees")
+}
+
+/// Table to store **Responses** for each step transition (History)
+model Response {
+  id               Int          @id @default(autoincrement())
+  workflowId       Int
+  templateStepId   Int
+  responderId      Int
+  responseType     ResponseEnum
+  description      String?
+  createdAt        DateTime     @default(now())
+
+  // Relations
+  workflow              Workflow               @relation(fields: [workflowId], references: [id])
+  templateStep          TemplateStep           @relation(fields: [templateStepId], references: [id])
+  responder             User                   @relation(fields: [responderId], references: [id])
+  history               History?
+  attachments           ResponseAttachment[]
+
+  @@index([workflowId, templateStepId])
+  @@map("responses")
+}
+
+/// Table to log history of state changes (for debuggability)
+model History {
+  id                        Int                @id @default(autoincrement())
+  workflowId                Int
+  templateStepId            Int
+  nextStepOrder             Int
+  eventType                 HistoryEventEnum
+  triggeredByResponseId     Int?               @unique
+  createdAt                 DateTime           @default(now())
+
+  // Relations
+  workflow              Workflow     @relation(fields: [workflowId], references: [id])
+  templateStep          TemplateStep @relation(fields: [templateStepId], references: [id])
+  triggeredByResponse   Response?    @relation(fields: [triggeredByResponseId], references: [id])
+
+  @@map("history")
+}
+
+/// Separate table for file attachments to responses (better normalization)
+model ResponseAttachment {
+  id          Int      @id @default(autoincrement())
+  responseId  Int
+  fileUrl     String
+  fileName    String?
+  createdAt   DateTime @default(now())
+
+  // Relations
+  response Response @relation(fields: [responseId], references: [id])
+
+  @@map("response_attachments")
 }

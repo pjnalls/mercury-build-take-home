@@ -4,12 +4,12 @@ jobs:
   e2e:
     name: 'Build + E2E tests'
     services:
-      postgres:
-        image: postgres
+      sqlite:
+        image: sqlite
         env:
-          POSTGRES_DATABASE: trpcdb
-          POSTGRES_USER: postgres
-          POSTGRES_HOST_AUTH_METHOD: trust
+          SQLITE_DATABASE: trpcdb
+          SQLITE_USER: sqlite
+          SQLITE_HOST_AUTH_METHOD: trust
         ports:
           - 5432:5432
     env:
@@ -63,12 +63,12 @@ jobs:
   unit:
     name: 'Unit tests + typecheck'
     services:
-      postgres:
-        image: postgres
+      sqlite:
+        image: sqlite
         env:
-          POSTGRES_DATABASE: trpcdb
-          POSTGRES_USER: postgres
-          POSTGRES_HOST_AUTH_METHOD: trust
+          SQLITE_DATABASE: trpcdb
+          SQLITE_USER: sqlite
+          SQLITE_HOST_AUTH_METHOD: trust
         ports:
           - 5432:5432
     env:

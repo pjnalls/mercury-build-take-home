@@ -43,7 +43,7 @@ pnpm dx
 pnpm build      # runs `prisma generate` + `prisma migrate` + `next build`
 pnpm db-reset   # resets local db
 pnpm dev        # starts next.js
-pnpm dx         # starts postgres db + runs migrations + seeds + starts next.js
+pnpm dx         # starts sqlite db + runs migrations + seeds + starts next.js
 pnpm test-dev   # runs e2e tests on dev
 pnpm test-start # runs e2e + unit tests
 pnpm test-unit  # runs normal Vitest unit tests
