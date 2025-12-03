@@ -1,176 +1,161 @@
-import { PrismaClient } from '@prisma/client';
-// import { RuleEnum, WorkflowStatusEnum } from './types'; // Assuming you reuse local enums or import from @prisma/client
+import { PrismaClient, rule_enum, response_enum, workflow_status_enum, history_event_enum } from '@prisma/client'
 
-// Defines the completion rule type for a step
-export enum RuleEnum {
-  ALL = 'ALL',
-  ANY = 'ANY',
-  K_OF_N = 'K_OF_N',
-}
-
-// Defines the type of response given by a user
-export enum ResponseEnum {
-  POSITIVE = 'POSITIVE',
-  NEGATIVE = 'NEGATIVE',
-}
-
-// Defines the overall status of a workflow instance
-export enum WorkflowStatusEnum {
-  IN_PROGRESS = 'IN_PROGRESS',
-  COMPLETED = 'COMPLETED',
-  CANCELED = 'CANCELED',
-}
-
-// Defines the type of event logged in the history table
-export enum HistoryEventEnum {
-  WORKFLOW_STARTED = 'WORKFLOW_STARTED',
-  STEP_ADVANCED = 'STEP_ADVANCED',
-  STEP_SENT_BACK = 'STEP_SENT_BACK',
-  WORKFLOW_COMPLETED = 'WORKFLOW_COMPLETED',
-}
-
-// 1. Instantiate PrismaClient directly in the seed script
-const prisma = new PrismaClient();
+const prisma = new PrismaClient()
 
 async function main() {
-  console.log(`Start seeding ...`);
+  console.log('--- Starting Seeding Process ---')
 
-  // ------------------------------------------------------------------
-  // A. Create necessary users
-  // ------------------------------------------------------------------
-  const user1 = await prisma.user.upsert({
-    where: { email: 'alice@example.com' },
+  // 1. Create Users (for assignees, responders, etc.)
+  const [userAlice, userBob, userCharlie] = await Promise.all([
+    prisma.users.upsert({
+      where: { email: 'alice.johnson@example.com' },
+      update: {},
+      create: { name: 'Alice Johnson (Manager)', email: 'alice.johnson@example.com' },
+    }),
+    prisma.users.upsert({
+      where: { email: 'bob.smith@example.com' },
+      update: {},
+      create: { name: 'Bob Smith (Reviewer)', email: 'bob.smith@example.com' },
+    }),
+    prisma.users.upsert({
+      where: { email: 'charlie.brown@example.com' },
+      update: {},
+      create: { name: 'Charlie Brown (Initiator)', email: 'charlie.brown@example.com' },
+    }),
+  ]);
+  console.log(`Created users: ${userAlice.name}, ${userBob.name}, ${userCharlie.name}`);
+
+  // 2. Create Workflow Template and Version (Nested Write)
+  const templateName = 'Vacation Request Approval';
+  const newTemplate = await prisma.workflow_templates.upsert({
+    where: { name: templateName, id: 1 }, // Dummy unique constraint for upsert
     update: {},
     create: {
-      email: 'alice@example.com',
-      name: 'Alice Manager',
-    },
-  });
-
-  const user2 = await prisma.user.upsert({
-    where: { email: 'bob@example.com' },
-    update: {},
-    create: {
-      email: 'bob@example.com',
-      name: 'Bob Reviewer',
-    },
-  });
-
-  console.log(`Created users: ${user1.name}, ${user2.name}`);
-
-  // ------------------------------------------------------------------
-  // B. Create a Workflow Template
-  // ------------------------------------------------------------------
-  const template = await prisma.workflowTemplate.upsert({
-    // TODO: Update to name or other fields as needed
-    where: { id: 1 },
-    update: {},
-    create: {
-      name: 'Simple Expense Approval',
-      description: 'A two-step approval process.',
-    },
-  });
-
-  console.log(`Created template: ${template.name}`);
-
-  // ------------------------------------------------------------------
-  // C. Add Steps to the Template
-  // ------------------------------------------------------------------
-  const step1 = await prisma.templateStep.upsert({
-    where: {
-      workflowTemplateId_stepOrder: {
-        workflowTemplateId: template.id,
-        stepOrder: 1,
+      name: templateName,
+      description: 'Standard workflow for submitting and approving paid time off (PTO).',
+      versions: {
+        create: {
+          version_number: 1,
+          is_active: true,
+          // 3. Create Template Steps (Nested Write)
+          template_steps: {
+            create: [
+              {
+                step_order: 1,
+                step_name: 'Submit Request',
+                completion_rule_type: rule_enum.ALL, // Initiator just needs to complete the form
+                metadata: { formId: 'PTO-101' },
+                // 4. Define Template Step Assignees (Nested Write - Assign to Initiator)
+                template_step_assignees: {
+                  create: [
+                    { user_id: userCharlie.id },
+                  ]
+                }
+              },
+              {
+                step_order: 2,
+                step_name: 'Manager Approval',
+                completion_rule_type: rule_enum.ANY, // Only Alice needs to approve (even if Bob is assigned as backup)
+                k_value: 1,
+                metadata: { deadline: '48h' },
+                // 4. Define Template Step Assignees (Nested Write - Assign to Manager/Reviewer)
+                template_step_assignees: {
+                  create: [
+                    { user_id: userAlice.id },
+                    { user_id: userBob.id }, // Bob is backup
+                  ]
+                }
+              },
+            ],
+          },
+        },
       },
     },
-    update: {},
-    create: {
-      workflowTemplateId: template.id,
-      stepOrder: 1,
-      stepName: 'Submitter Review',
-      completionRuleType: RuleEnum.ALL,
-      metadata: { instruction: 'Confirm all fields are correct.' },
-    },
+    include: {
+      versions: {
+        include: {
+          template_steps: true
+        }
+      }
+    }
   });
 
-  const step2 = await prisma.templateStep.upsert({
-    where: {
-      workflowTemplateId_stepOrder: {
-        workflowTemplateId: template.id,
-        stepOrder: 2,
-      },
-    },
-    update: {},
-    create: {
-      workflowTemplateId: template.id,
-      stepOrder: 2,
-      stepName: 'Manager Approval',
-      completionRuleType: RuleEnum.ANY,
-      metadata: { instruction: 'Approve or reject the expense.' },
-    },
-  });
+  const templateVersion = newTemplate.versions[0];
+  const stepOne = templateVersion.template_steps.find(s => s.step_order === 1);
+  const stepTwo = templateVersion.template_steps.find(s => s.step_order === 2);
+  console.log(`Created Template: ${newTemplate.name} (v${templateVersion.version_number})`);
+  console.log(`  Step 1: ${stepOne?.step_name} (ID: ${stepOne?.id})`);
+  console.log(`  Step 2: ${stepTwo?.step_name} (ID: ${stepTwo?.id})`);
 
-  console.log(`Created steps: ${step1.stepName}, ${step2.stepName}`);
-
-  // D. Assign users to the template steps (TemplateStepAssignee)
-  // ------------------------------------------------------------------
-  // FIX: Use upsert because skipDuplicates is not available for SQLite.
-
-  // Assign Alice (user1) to step 2 (Manager Approval)
-  await prisma.templateStepAssignee.upsert({
-    // The 'where' clause MUST specify the composite unique key
-    where: {
-      templateStepId_userId: {
-        templateStepId: step2.id,
-        userId: user1.id,
-      },
-    },
-    update: {}, // Nothing needs to be updated if the record exists
-    create: {
-      templateStepId: step2.id,
-      userId: user1.id,
-    },
-  });
-
-  // Assign Bob (user2) to step 1 (Submitter Review)
-  await prisma.templateStepAssignee.upsert({
-    // The 'where' clause MUST specify the composite unique key
-    where: {
-      templateStepId_userId: {
-        templateStepId: step1.id,
-        userId: user2.id,
-      },
-    },
-    update: {}, // Nothing needs to be updated if the record exists
-    create: {
-      templateStepId: step1.id,
-      userId: user2.id,
-    },
-  });
-
-  console.log(`Assigned users to template steps.`);
-
-  // ------------------------------------------------------------------
-  // E. Create an initial Workflow Instance
-  // ------------------------------------------------------------------
-  await prisma.workflow.create({
+  // 5. Create an Active Workflow Instance (Vacation Request for Charlie)
+  const activeWorkflow = await prisma.workflows.create({
     data: {
-      workflowTemplateId: template.id,
-      currentStepOrder: step1.stepOrder, // Start at step 1
-      status: WorkflowStatusEnum.IN_PROGRESS,
-    },
+      workflow_template_version_id: templateVersion.id,
+      status: workflow_status_enum.IN_PROGRESS,
+      current_step_order: stepTwo?.step_order || 2, // Start past the first step for a more complex example
+    }
   });
+  console.log(`Created Active Workflow ID: ${activeWorkflow.id} (Status: ${activeWorkflow.status})`);
 
-  console.log(`Created an initial workflow instance.`);
-  console.log(`Seeding finished.`);
+  // 6. Log Initial Workflow History
+  const historyEvent = await prisma.history.create({
+    data: {
+      workflow_id: activeWorkflow.id,
+      template_step_id: stepOne!.id, // Reference the first step
+      event_type: history_event_enum.WORKFLOW_STARTED,
+      next_step_order: activeWorkflow.current_step_order,
+    }
+  });
+  console.log(`Logged history event ID: ${historyEvent.id}`);
+
+  // 7. Define Current Step Assignees (Step 2)
+  await prisma.workflow_assignees.createMany({
+    data: [
+      {
+        workflow_id: activeWorkflow.id,
+        template_step_id: stepTwo!.id,
+        assignee_user_id: userAlice.id,
+      },
+      {
+        workflow_id: activeWorkflow.id,
+        template_step_id: stepTwo!.id,
+        assignee_user_id: userBob.id,
+      },
+    ]
+  });
+  console.log(`Defined assignees for Workflow ${activeWorkflow.id} / Step ${stepTwo?.id}`);
+
+  // 8. Log a Response (Alice Approves Step 2)
+  const approvalResponse = await prisma.responses.create({
+    data: {
+      workflow_id: activeWorkflow.id,
+      template_step_id: stepTwo!.id,
+      responder_id: userAlice.id,
+      response_type: response_enum.POSITIVE,
+      description: 'Approved. Alice is available to cover.',
+      revision_number: 1,
+      // 9. Add an attachment to the response (Nested Write)
+      attachments: {
+        create: {
+          file_url: 'https://docs.example.com/alice-approval-memo.pdf',
+          file_name: 'Approval Memo',
+        }
+      }
+    },
+    include: {
+      attachments: true,
+    }
+  });
+  console.log(`Logged response ID: ${approvalResponse.id} by ${userAlice.name} with ${approvalResponse.attachments.length} attachment(s).`);
+
+  console.log('--- Seeding Complete ---')
 }
 
 main()
   .catch((e) => {
-    console.error(e);
-    process.exit(1);
+    console.error(e)
+    process.exit(1)
   })
   .finally(async () => {
-    // 2. Disconnect the client when the script is done
-    await prisma.$disconnect();
-  });
+    await prisma.$disconnect()
+  })

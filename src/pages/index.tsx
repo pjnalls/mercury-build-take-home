@@ -2,43 +2,26 @@ import { trpc } from '../utils/trpc';
 import type { NextPageWithLayout } from './_app';
 import type { inferProcedureInput } from '@trpc/server';
 import Link from 'next/link';
+import { Fragment } from 'react';
 import type { AppRouter } from '~/server/routers/_app';
 
 const IndexPage: NextPageWithLayout = () => {
   const utils = trpc.useUtils();
-  // const postsQuery = trpc.post.list.useInfiniteQuery(
-  //   {
-  //     limit: 5,
-  //   },
-  //   {
-  //     getNextPageParam(lastPage) {
-  //       return lastPage.nextCursor;
-  //     },
-  //   },
-  // );
-
-  // const addPost = trpc.post.add.useMutation({
-  //   async onSuccess() {
-  //     // refetches posts after a post is added
-  //     await utils.post.list.invalidate();
-  //   },
-  // });
-  const postsQuery = trpc.post.getWorkflowState.useQuery(
+  const postsQuery = trpc.post.list.useInfiniteQuery(
     {
-      workflowId: 3,
+      limit: 5,
     },
     {
-      throwOnError(error, query) {
-        console.log('Error thrown from', { error, query });
-        return true;
+      getNextPageParam(lastPage) {
+        return lastPage.nextCursor;
       },
     },
   );
-  const createWorflowTemplate = trpc.post.createTemplate.useMutation({
+
+  const addPost = trpc.post.add.useMutation({
     async onSuccess() {
       // refetches posts after a post is added
-      await utils.post.getWorkflowState.invalidate();
-      console.log('Workflow Template created successfully');
+      await utils.post.list.invalidate();
     },
   });
 
@@ -80,17 +63,31 @@ const IndexPage: NextPageWithLayout = () => {
           Latest Posts
           {postsQuery.status === 'pending' && '(loading)'}
         </h2>
-        <article key={postsQuery.data?.id}>
-          <h3 className="text-2xl font-semibold">
-            {postsQuery.data?.workflowTemplate.name}
-          </h3>
-          <Link
-            className="text-gray-400"
-            href={`/post/${postsQuery.data?.workflowTemplate.id}`}
-          >
-            View more
-          </Link>
-        </article>
+
+        <button
+          className="bg-gray-900 p-2 rounded-md font-semibold disabled:bg-gray-700 disabled:text-gray-400"
+          onClick={() => postsQuery.fetchNextPage()}
+          disabled={!postsQuery.hasNextPage || postsQuery.isFetchingNextPage}
+        >
+          {postsQuery.isFetchingNextPage
+            ? 'Loading more...'
+            : postsQuery.hasNextPage
+              ? 'Load More'
+              : 'Nothing more to load'}
+        </button>
+
+        {postsQuery.data?.pages.map((page, index) => (
+          <Fragment key={page.items[0]?.id || index}>
+            {page.items.map((item) => (
+              <article key={item.id}>
+                <h3 className="text-2xl font-semibold">{item.title}</h3>
+                <Link className="text-gray-400" href={`/post/${item.id}`}>
+                  View more
+                </Link>
+              </article>
+            ))}
+          </Fragment>
+        ))}
       </div>
 
       <hr />
@@ -110,16 +107,14 @@ const IndexPage: NextPageWithLayout = () => {
             e.preventDefault();
             const $form = e.currentTarget;
             const values = Object.fromEntries(new FormData($form));
-            type Input = inferProcedureInput<
-              AppRouter['post']['createTemplate']
-            >;
+            type Input = inferProcedureInput<AppRouter['post']['add']>;
             //    ^?
             const input: Input = {
-              name: values.name as string,
-              description: values.description as string,
+              title: values.title as string,
+              text: values.text as string,
             };
             try {
-              await createWorflowTemplate.mutateAsync(input);
+              await addPost.mutateAsync(input);
 
               $form.reset();
             } catch (cause) {
@@ -130,18 +125,18 @@ const IndexPage: NextPageWithLayout = () => {
           <div className="flex flex-col gap-y-4 font-semibold">
             <input
               className="focus-visible:outline-dashed outline-offset-4 outline-2 outline-gray-700 rounded-xl px-4 py-3 bg-gray-900"
-              id="name"
-              name="name"
+              id="title"
+              name="title"
               type="text"
-              placeholder="Name"
-              disabled={createWorflowTemplate.isPending}
+              placeholder="Title"
+              disabled={addPost.isPending}
             />
             <textarea
               className="resize-none focus-visible:outline-dashed outline-offset-4 outline-2 outline-gray-700 rounded-xl px-4 py-3 bg-gray-900"
-              id="description"
-              name="description"
-              placeholder="Description"
-              disabled={createWorflowTemplate.isPending}
+              id="text"
+              name="text"
+              placeholder="Text"
+              disabled={addPost.isPending}
               rows={6}
             />
 
@@ -149,12 +144,10 @@ const IndexPage: NextPageWithLayout = () => {
               <input
                 className="cursor-pointer bg-gray-900 p-2 rounded-md px-16"
                 type="submit"
-                disabled={createWorflowTemplate.isPending}
+                disabled={addPost.isPending}
               />
-              {createWorflowTemplate.error && (
-                <p style={{ color: 'red' }}>
-                  {createWorflowTemplate.error.message}
-                </p>
+              {addPost.error && (
+                <p style={{ color: 'red' }}>{addPost.error.message}</p>
               )}
             </div>
           </div>

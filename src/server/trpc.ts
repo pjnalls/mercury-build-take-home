@@ -9,29 +9,27 @@
  */
 
 import { initTRPC } from '@trpc/server';
-import superjson from 'superjson';
+import { transformer } from '~/utils/transformer';
+import type { Context } from './context';
 
-// --- 1. Define Context Interface ---
-// The context is the data passed to every tRPC procedure.
-// It typically includes things like the authenticated user ID and database clients.
-// We assume 'prisma' is available and 'userId' is provided by a middleware/auth layer.
-interface Context {
-  // We expect userId to be provided by an authentication middleware.
-  // We use number here to match the `User.id` type in your schema.
-  userId: number | null; 
-  // Add other necessary components here, but for this example, we keep it simple.
-  // prisma: PrismaClient; 
-}
-
-// --- 2. Initialize tRPC ---
-export const t = initTRPC.context<Context>().create({
-  // SuperJSON is highly recommended for handling complex types like Date, Map, Set, and BigInt
-  // when passing data between the client and server.
-  transformer: superjson,
+const t = initTRPC.context<Context>().create({
+  /**
+   * @see https://trpc.io/docs/v11/data-transformers
+   */
+  transformer,
+  /**
+   * @see https://trpc.io/docs/v11/error-formatting
+   */
   errorFormatter({ shape }) {
     return shape;
   },
 });
+
+/**
+ * Create a router
+ * @see https://trpc.io/docs/v11/router
+ */
+export const router = t.router;
 
 /**
  * Create an unprotected procedure
@@ -50,9 +48,3 @@ export const mergeRouters = t.mergeRouters;
  * @see https://trpc.io/docs/v11/server/server-side-calls
  */
 export const createCallerFactory = t.createCallerFactory;
-
-// --- 3. Export Procedures and Router Helpers ---
-
-// Base router and procedure helpers
-export const router = t.router;
-export const procedure = t.procedure;
