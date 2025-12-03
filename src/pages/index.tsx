@@ -7,31 +7,31 @@ import type { AppRouter } from '~/server/routers/_app';
 
 const IndexPage: NextPageWithLayout = () => {
   const utils = trpc.useUtils();
-  const postsQuery = trpc.post.list.useInfiniteQuery(
+  const workflowsQuery = trpc.workflow.listWorkflowTemplates.useInfiniteQuery(
     {
       limit: 5,
     },
-    {
-      getNextPageParam(lastPage) {
-        return lastPage.nextCursor;
-      },
-    },
+    // {
+    //   getNextPageParam(lastPage) {
+    //     return lastPage.nextCursor;
+    //   },
+    // },
   );
 
-  const addPost = trpc.post.add.useMutation({
+  const createWorkflow = trpc.workflow.createWorkflowTemplate.useMutation({
     async onSuccess() {
-      // refetches posts after a post is added
-      await utils.post.list.invalidate();
+      // refetches posts after a post is created
+      await utils.workflow.listWorkflowTemplates.invalidate();
     },
   });
 
   // prefetch all posts for instant navigation
   // useEffect(() => {
-  //   const allPosts = postsQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  //   const allPosts = workflowsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   //   for (const { id } of allPosts) {
   //     void utils.post.byId.prefetch({ id });
   //   }
-  // }, [postsQuery.data, utils]);
+  // }, [workflowsQuery.data, utils]);
 
   return (
     <div className="flex flex-col bg-gray-800 py-8">
@@ -61,26 +61,26 @@ const IndexPage: NextPageWithLayout = () => {
         <div className="flex flex-col"></div>
         <h2 className="text-3xl font-semibold">
           Latest Posts
-          {postsQuery.status === 'pending' && '(loading)'}
+          {workflowsQuery.status === 'pending' && '(loading)'}
         </h2>
 
         <button
           className="bg-gray-900 p-2 rounded-md font-semibold disabled:bg-gray-700 disabled:text-gray-400"
-          onClick={() => postsQuery.fetchNextPage()}
-          disabled={!postsQuery.hasNextPage || postsQuery.isFetchingNextPage}
+          onClick={() => workflowsQuery.fetchNextPage()}
+          disabled={!workflowsQuery.hasNextPage || workflowsQuery.isFetchingNextPage}
         >
-          {postsQuery.isFetchingNextPage
+          {workflowsQuery.isFetchingNextPage
             ? 'Loading more...'
-            : postsQuery.hasNextPage
+            : workflowsQuery.hasNextPage
               ? 'Load More'
               : 'Nothing more to load'}
         </button>
 
-        {postsQuery.data?.pages.map((page, index) => (
-          <Fragment key={page.items[0]?.id || index}>
-            {page.items.map((item) => (
+        {workflowsQuery.data?.pages.map((page, index) => (
+          <Fragment key={page[0]?.id || index}>
+            {page.map((item) => (
               <article key={item.id}>
-                <h3 className="text-2xl font-semibold">{item.title}</h3>
+                <h3 className="text-2xl font-semibold">{item.name}</h3>
                 <Link className="text-gray-400" href={`/post/${item.id}`}>
                   View more
                 </Link>
@@ -93,7 +93,7 @@ const IndexPage: NextPageWithLayout = () => {
       <hr />
 
       <div className="flex flex-col py-8 items-center">
-        <h2 className="text-3xl font-semibold pb-2">Add a Post</h2>
+        <h2 className="text-3xl font-semibold pb-2">Create a Workflow</h2>
 
         <form
           className="py-2 w-4/6"
@@ -107,36 +107,36 @@ const IndexPage: NextPageWithLayout = () => {
             e.preventDefault();
             const $form = e.currentTarget;
             const values = Object.fromEntries(new FormData($form));
-            type Input = inferProcedureInput<AppRouter['post']['add']>;
+            type Input = inferProcedureInput<AppRouter['workflow']['createWorkflowTemplate']>;
             //    ^?
             const input: Input = {
-              title: values.title as string,
-              text: values.text as string,
+              name: values.name as string,
+              description: values.description as string,
             };
             try {
-              await addPost.mutateAsync(input);
+              await createWorkflow.mutateAsync(input);
 
               $form.reset();
             } catch (cause) {
-              console.error({ cause }, 'Failed to add post');
+              console.error({ cause }, 'Failed to create post');
             }
           }}
         >
           <div className="flex flex-col gap-y-4 font-semibold">
             <input
               className="focus-visible:outline-dashed outline-offset-4 outline-2 outline-gray-700 rounded-xl px-4 py-3 bg-gray-900"
-              id="title"
-              name="title"
+              id="name"
+              name="name"
               type="text"
-              placeholder="Title"
-              disabled={addPost.isPending}
+              placeholder="Name"
+              disabled={createWorkflow.isPending}
             />
             <textarea
               className="resize-none focus-visible:outline-dashed outline-offset-4 outline-2 outline-gray-700 rounded-xl px-4 py-3 bg-gray-900"
-              id="text"
-              name="text"
-              placeholder="Text"
-              disabled={addPost.isPending}
+              id="description"
+              name="description"
+              placeholder="Description"
+              disabled={createWorkflow.isPending}
               rows={6}
             />
 
@@ -144,10 +144,10 @@ const IndexPage: NextPageWithLayout = () => {
               <input
                 className="cursor-pointer bg-gray-900 p-2 rounded-md px-16"
                 type="submit"
-                disabled={addPost.isPending}
+                disabled={createWorkflow.isPending}
               />
-              {addPost.error && (
-                <p style={{ color: 'red' }}>{addPost.error.message}</p>
+              {createWorkflow.error && (
+                <p style={{ color: 'red' }}>{createWorkflow.error.message}</p>
               )}
             </div>
           </div>
