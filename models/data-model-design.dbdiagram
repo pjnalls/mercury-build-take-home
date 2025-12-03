@@ -11,7 +11,7 @@
       "y": 688
     },
     {
-      "name": "workflow_templates",
+      "name": "workflowTemplate",
       "schemaName": "public",
       "x": 1088,
       "y": 832
@@ -66,7 +66,7 @@
       "firstFieldNames": [
         "id"
       ],
-      "firstTableName": "workflow_templates",
+      "firstTableName": "workflowTemplate",
       "firstSchemaName": "public",
       "firstRelation": "1",
       "secondFieldNames": [
@@ -111,7 +111,7 @@
       "firstFieldNames": [
         "id"
       ],
-      "firstTableName": "workflow_templates",
+      "firstTableName": "workflowTemplate",
       "firstSchemaName": "public",
       "firstRelation": "1",
       "secondFieldNames": [

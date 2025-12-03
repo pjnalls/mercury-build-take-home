@@ -15,8 +15,8 @@ test('add and get workflow template', async () => {
     description: 'A template for testing purposes',
   };
 
-  const workflow = await caller.workflow.createWorkflowTemplate(input);
-  const byId = await caller.workflow.getWorkflowTemplateDetails({ workflowId: workflow.templateId });
+  const workflowTemplate = await caller.workflow.createWorkflowTemplate(input);
+  const byId = await caller.workflow.getWorkflowTemplateDetails({ workflowId: workflowTemplate.templateId });
 
   expect(byId).toMatchObject(input);
 });

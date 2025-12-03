@@ -11,11 +11,11 @@ const IndexPage: NextPageWithLayout = () => {
     {
       limit: 5,
     },
-    // {
-    //   getNextPageParam(lastPage) {
-    //     return lastPage.nextCursor;
-    //   },
-    // },
+    {
+      getNextPageParam(lastPage) {
+        return lastPage.nextCursor;
+      },
+    },
   );
 
   const createWorkflow = trpc.workflow.createWorkflowTemplate.useMutation({
@@ -77,8 +77,8 @@ const IndexPage: NextPageWithLayout = () => {
         </button>
 
         {workflowsQuery.data?.pages.map((page, index) => (
-          <Fragment key={page[0]?.id || index}>
-            {page.map((item) => (
+          <Fragment key={page.items[0]?.id || index}>
+            {page.items.map((item) => (
               <article key={item.id}>
                 <h3 className="text-2xl font-semibold">{item.name}</h3>
                 <Link className="text-gray-400" href={`/post/${item.id}`}>

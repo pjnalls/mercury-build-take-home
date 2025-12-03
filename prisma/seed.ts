@@ -1,4 +1,4 @@
-import { PrismaClient, rule_enum, response_enum, workflow_status_enum, history_event_enum } from '@prisma/client'
+import { PrismaClient, RuleEnum, ResponseEnum, WorkflowStatusEnum, HistoryEventEnum } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
@@ -7,27 +7,27 @@ async function main() {
 
   // 1. Create Users (for assignees, responders, etc.)
   const [userAlice, userBob, userCharlie] = await Promise.all([
-    prisma.users.upsert({
+    prisma.user.upsert({
       where: { email: 'alice.johnson@example.com' },
       update: {},
       create: { name: 'Alice Johnson (Manager)', email: 'alice.johnson@example.com' },
     }),
-    prisma.users.upsert({
+    prisma.user.upsert({
       where: { email: 'bob.smith@example.com' },
       update: {},
       create: { name: 'Bob Smith (Reviewer)', email: 'bob.smith@example.com' },
     }),
-    prisma.users.upsert({
+    prisma.user.upsert({
       where: { email: 'charlie.brown@example.com' },
       update: {},
       create: { name: 'Charlie Brown (Initiator)', email: 'charlie.brown@example.com' },
     }),
   ]);
-  console.log(`Created users: ${userAlice.name}, ${userBob.name}, ${userCharlie.name}`);
+  console.log(`Created user: ${userAlice.name}, ${userBob.name}, ${userCharlie.name}`);
 
   // 2. Create Workflow Template and Version (Nested Write)
   const templateName = 'Vacation Request Approval';
-  const newTemplate = await prisma.workflow_templates.upsert({
+  const newTemplate = await prisma.workflowTemplate.upsert({
     where: { name: templateName, id: 1 }, // Dummy unique constraint for upsert
     update: {},
     create: {
@@ -35,34 +35,34 @@ async function main() {
       description: 'Standard workflow for submitting and approving paid time off (PTO).',
       versions: {
         create: {
-          version_number: 1,
-          is_active: true,
+          versionNumber: 1,
+          isActive: true,
           // 3. Create Template Steps (Nested Write)
-          template_steps: {
+          templateSteps: {
             create: [
               {
-                step_order: 1,
-                step_name: 'Submit Request',
-                completion_rule_type: rule_enum.ALL, // Initiator just needs to complete the form
+                stepOrder: 1,
+                stepName: 'Submit Request',
+                completionRuleType: RuleEnum.ALL, // Initiator just needs to complete the form
                 metadata: { formId: 'PTO-101' },
                 // 4. Define Template Step Assignees (Nested Write - Assign to Initiator)
-                template_step_assignees: {
+                templateStepAssignees: {
                   create: [
-                    { user_id: userCharlie.id },
+                    { userId: userCharlie.id },
                   ]
                 }
               },
               {
-                step_order: 2,
-                step_name: 'Manager Approval',
-                completion_rule_type: rule_enum.ANY, // Only Alice needs to approve (even if Bob is assigned as backup)
-                k_value: 1,
+                stepOrder: 2,
+                stepName: 'Manager Approval',
+                completionRuleType: RuleEnum.ANY, // Only Alice needs to approve (even if Bob is assigned as backup)
+                kValue: 1,
                 metadata: { deadline: '48h' },
                 // 4. Define Template Step Assignees (Nested Write - Assign to Manager/Reviewer)
-                template_step_assignees: {
+                templateStepAssignees: {
                   create: [
-                    { user_id: userAlice.id },
-                    { user_id: userBob.id }, // Bob is backup
+                    { userId: userAlice.id },
+                    { userId: userBob.id }, // Bob is backup
                   ]
                 }
               },
@@ -74,25 +74,25 @@ async function main() {
     include: {
       versions: {
         include: {
-          template_steps: true
+          templateSteps: true
         }
       }
     }
   });
 
   const templateVersion = newTemplate.versions[0];
-  const stepOne = templateVersion.template_steps.find(s => s.step_order === 1);
-  const stepTwo = templateVersion.template_steps.find(s => s.step_order === 2);
-  console.log(`Created Template: ${newTemplate.name} (v${templateVersion.version_number})`);
-  console.log(`  Step 1: ${stepOne?.step_name} (ID: ${stepOne?.id})`);
-  console.log(`  Step 2: ${stepTwo?.step_name} (ID: ${stepTwo?.id})`);
+  const stepOne = templateVersion.templateSteps.find(s => s.stepOrder === 1);
+  const stepTwo = templateVersion.templateSteps.find(s => s.stepOrder === 2);
+  console.log(`Created Template: ${newTemplate.name} (v${templateVersion.versionNumber})`);
+  console.log(`  Step 1: ${stepOne?.stepName} (ID: ${stepOne?.id})`);
+  console.log(`  Step 2: ${stepTwo?.stepName} (ID: ${stepTwo?.id})`);
 
   // 5. Create an Active Workflow Instance (Vacation Request for Charlie)
-  const activeWorkflow = await prisma.workflows.create({
+  const activeWorkflow = await prisma.workflow.create({
     data: {
-      workflow_template_version_id: templateVersion.id,
-      status: workflow_status_enum.IN_PROGRESS,
-      current_step_order: stepTwo?.step_order || 2, // Start past the first step for a more complex example
+      workflowTemplateVersionId: templateVersion.id,
+      status: WorkflowStatusEnum.IN_PROGRESS,
+      currentStepOrder: stepTwo?.stepOrder || 2, // Start past the first step for a more complex example
     }
   });
   console.log(`Created Active Workflow ID: ${activeWorkflow.id} (Status: ${activeWorkflow.status})`);
@@ -100,45 +100,45 @@ async function main() {
   // 6. Log Initial Workflow History
   const historyEvent = await prisma.history.create({
     data: {
-      workflow_id: activeWorkflow.id,
-      template_step_id: stepOne!.id, // Reference the first step
-      event_type: history_event_enum.WORKFLOW_STARTED,
-      next_step_order: activeWorkflow.current_step_order,
+      workflowId: activeWorkflow.id,
+      templateStepId: stepOne!.id, // Reference the first step
+      eventType: HistoryEventEnum.WORKFLOW_STARTED,
+      nextStepOrder: activeWorkflow.currentStepOrder,
     }
   });
   console.log(`Logged history event ID: ${historyEvent.id}`);
 
   // 7. Define Current Step Assignees (Step 2)
-  await prisma.workflow_assignees.createMany({
+  await prisma.workflowAssignee.createMany({
     data: [
       {
-        workflow_id: activeWorkflow.id,
-        template_step_id: stepTwo!.id,
-        assignee_user_id: userAlice.id,
+        workflowId: activeWorkflow.id,
+        templateStepId: stepTwo!.id,
+        assigneeUserId: userAlice.id,
       },
       {
-        workflow_id: activeWorkflow.id,
-        template_step_id: stepTwo!.id,
-        assignee_user_id: userBob.id,
+        workflowId: activeWorkflow.id,
+        templateStepId: stepTwo!.id,
+        assigneeUserId: userBob.id,
       },
     ]
   });
   console.log(`Defined assignees for Workflow ${activeWorkflow.id} / Step ${stepTwo?.id}`);
 
   // 8. Log a Response (Alice Approves Step 2)
-  const approvalResponse = await prisma.responses.create({
+  const approvalResponse = await prisma.response.create({
     data: {
-      workflow_id: activeWorkflow.id,
-      template_step_id: stepTwo!.id,
-      responder_id: userAlice.id,
-      response_type: response_enum.POSITIVE,
+      workflowId: activeWorkflow.id,
+      templateStepId: stepTwo!.id,
+      responderId: userAlice.id,
+      responseType: ResponseEnum.POSITIVE,
       description: 'Approved. Alice is available to cover.',
-      revision_number: 1,
+      revisionNumber: 1,
       // 9. Add an attachment to the response (Nested Write)
       attachments: {
         create: {
-          file_url: 'https://docs.example.com/alice-approval-memo.pdf',
-          file_name: 'Approval Memo',
+          fileUrl: 'https://docs.example.com/alice-approval-memo.pdf',
+          fileName: 'Approval Memo',
         }
       }
     },
