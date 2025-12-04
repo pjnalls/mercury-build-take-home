@@ -6,33 +6,33 @@ import type { NextPageWithLayout } from '~/pages/_app';
 import type { RouterOutput } from '~/utils/trpc';
 import { trpc } from '~/utils/trpc';
 
-type PostByIdOutput = RouterOutput['post']['byId'];
+type WorkflowTemplateByIdOutput = RouterOutput['workflow']['queryWorkflowTemplateDetails'];
 
-function PostItem(props: { post: PostByIdOutput }) {
-  const { post } = props;
+function WorkflowTemplateItem(props: { workflowTemplate: WorkflowTemplateByIdOutput }) {
+  const { workflowTemplate } = props;
   return (
     <div className="flex flex-col justify-center h-full px-8 ">
       <Link className="text-gray-300 underline mb-4" href="/">
         Home
       </Link>
-      <h1 className="text-4xl font-bold">{post.title}</h1>
+      <h1 className="text-4xl font-bold">{workflowTemplate?.name}</h1>
       <em className="text-gray-400">
-        Created {post.createdAt.toLocaleDateString('en-us')}
+        Created {workflowTemplate?.createdAt.toLocaleDateString('en-us')}
       </em>
 
-      <p className="py-4 break-all">{post.text}</p>
+      <p className="py-4 break-all">{workflowTemplate?.description}</p>
 
       <h2 className="text-2xl font-semibold py-2">Raw data:</h2>
       <pre className="bg-gray-900 p-4 rounded-xl overflow-x-scroll">
-        {JSON.stringify(post, null, 4)}
+        {JSON.stringify(workflowTemplate, null, 4)}
       </pre>
     </div>
   );
 }
 
-const PostViewPage: NextPageWithLayout = () => {
+const WorkflowTemplateViewPage: NextPageWithLayout = () => {
   const id = useRouter().query.id as string;
-  const postQuery = trpc.post.byId.useQuery({ id });
+  const postQuery = trpc.workflow.queryWorkflowTemplateDetails.useQuery({ workflowId: Number(id) });
 
   if (postQuery.error) {
     return (
@@ -54,7 +54,7 @@ const PostViewPage: NextPageWithLayout = () => {
     );
   }
   const { data } = postQuery;
-  return <PostItem post={data} />;
+  return <WorkflowTemplateItem workflowTemplate={data} />;
 };
 
-export default PostViewPage;
+export default WorkflowTemplateViewPage;

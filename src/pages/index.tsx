@@ -60,7 +60,7 @@ const IndexPage: NextPageWithLayout = () => {
       <div className="flex flex-col py-8 items-start gap-y-2">
         <div className="flex flex-col"></div>
         <h2 className="text-3xl font-semibold">
-          Latest Posts
+          Latest Workflow Templates
           {workflowsQuery.status === 'pending' && '(loading)'}
         </h2>
 
@@ -93,7 +93,7 @@ const IndexPage: NextPageWithLayout = () => {
       <hr />
 
       <div className="flex flex-col py-8 items-center">
-        <h2 className="text-3xl font-semibold pb-2">Create a Workflow</h2>
+        <h2 className="text-3xl font-semibold pb-2">Create a Workflow Templates</h2>
 
         <form
           className="py-2 w-4/6"

@@ -1,4 +1,4 @@
-import { router, publicProcedure } from '../trpc';
+import { router, publicProcedure, protectedProcedure } from '../trpc';
 import { z } from 'zod';
 import {
   RuleEnum,
@@ -8,27 +8,15 @@ import {
 } from '@prisma/client';
 import { prisma } from '~/server/prisma';
 
-// // Mock authenticated procedure. Assumes userId exists in context.
-// // In a real app, this would check session/token and handle unauthorized errors.
-// const protectedProcedure = t.procedure.use(async (opts) => {
-//   // Mock authentication check
-//   if (opts.ctx.userId === 0) {
-//     throw new Error('UNAUTHORIZED: user not logged in.');
-//   }
-//   return opts.next({
-//     ...opts.ctx,
-//     ctx: {
-//       // Context with validated user ID
-//       userId: opts.ctx.userId,
-//     },
-//   });
-// });
-
 // --- 2. ZOD INPUT SCHEMAS ---
 
 // Zod Enums for validation
 const ZodRuleEnum = z.nativeEnum(RuleEnum);
 const ZodResponseEnum = z.nativeEnum(ResponseEnum);
+
+const createWorkflowSchema = z.object({
+  workflowTemplateVersionId: z.number().int().positive(),
+});
 
 const createTemplateSchema = z.object({
   name: z.string().min(1, 'Template name is required.'),
@@ -44,15 +32,12 @@ const addStepSchema = z.object({
   metadata: z.record(z.unknown()).optional(),
 });
 
-const assignUsersSchema = z.object({
+const assignUsersAndSpecifyRuleSchema = z.object({
   templateStepId: z.number().int().positive(),
+  completionRuleType: ZodRuleEnum,
   userIds: z
     .array(z.number().int().positive())
     .min(1, 'At least one assignee is required.'),
-});
-
-const startWorkflowSchema = z.object({
-  workflowTemplateVersionId: z.number().int().positive(),
 });
 
 const submitResponseSchema = z.object({
@@ -63,6 +48,10 @@ const submitResponseSchema = z.object({
   // For simplicity, attachments are handled separately, but included in the payload
   fileUrl: z.string().url().optional(),
   fileName: z.string().optional(),
+});
+
+const queryCurrentWorkflowStatusAndHistorySchema = z.object({
+  workflowId: z.number().int().positive(),
 });
 
 // --- 3. BUSINESS LOGIC HELPERS ---
@@ -125,6 +114,62 @@ async function checkStepCompletion(
 
 export const workflowRouter = router({
   // ------------------
+  // WORKFLOW INSTANCES
+  // ------------------
+
+  /** Start a new Workflow Instance from a specific Template Version */
+  // TODO: protect this procedure with authentication middleware
+  createWorkflow: protectedProcedure
+    .input(createWorkflowSchema)
+    .mutation(async ({ input }) => {
+      const version = await prisma.workflowTemplateVersion.findUnique({
+        where: { id: input.workflowTemplateVersionId },
+        include: {
+          templateSteps: {
+            where: { stepOrder: 1 },
+            include: { templateStepAssignees: true },
+          },
+        },
+      });
+
+      if (!version || !version.templateSteps[0]) {
+        throw new Error('Template version or initial step not found.');
+      }
+
+      const firstStep = version.templateSteps[0];
+
+      // 1. Create the workflow instance
+      const newWorkflow = await prisma.workflow.create({
+        data: {
+          workflowTemplateVersionId: version.id,
+          currentStepOrder: firstStep.stepOrder,
+          status: WorkflowStatusEnum.IN_PROGRESS,
+        },
+      });
+
+      // 2. Define runtime assignees for the first step
+      const assigneeData = firstStep.templateStepAssignees.map((a) => ({
+        workflowId: newWorkflow.id,
+        templateStepId: firstStep.id,
+        assigneeUserId: a.userId,
+      }));
+      await prisma.workflowAssignee.createMany({ data: assigneeData });
+
+      // 3. Log history
+      await prisma.history.create({
+        data: {
+          workflowId: newWorkflow.id,
+          templateStepId: firstStep.id,
+          eventType: HistoryEventEnum.WORKFLOW_STARTED,
+        },
+      });
+
+      return {
+        message: `Workflow ${newWorkflow.id} started successfully.`,
+        workflowId: newWorkflow.id,
+      };
+    }),
+  // ------------------
   // TEMPLATE MANAGEMENT
   // ------------------
 
@@ -177,8 +222,8 @@ export const workflowRouter = router({
     }),
 
   /** Assign Users to a Step within a Template Version */
-  assignUsersToStep: publicProcedure
-    .input(assignUsersSchema)
+  assignUsersAndSpecifyRule: publicProcedure
+    .input(assignUsersAndSpecifyRuleSchema)
     .mutation(async ({ input }) => {
       const data = input.userIds.map((userId) => ({
         templateStepId: input.templateStepId,
@@ -188,19 +233,27 @@ export const workflowRouter = router({
       await prisma.templateStepAssignee.createMany({
         data: data,
       });
+
+      await prisma.templateStep.update({
+        where: { id: input.templateStepId },
+        data: { completionRuleType: input.completionRuleType },
+      });
+
       return {
         message: `${input.userIds.length} user(s) assigned to step ${input.templateStepId}.`,
       };
     }),
 
   /** List all available Workflow Templates */
-  listWorkflowTemplates: publicProcedure.input(
+  listWorkflowTemplates: publicProcedure
+    .input(
       z.object({
         limit: z.number().min(1).max(100).nullish(),
         cursor: z.string().nullish(),
       }),
-    ).query(async ({ input }) => {
-    /**
+    )
+    .query(async ({ input }) => {
+      /**
        * For pagination docs you can have a look here
        * @see https://trpc.io/docs/v11/useInfiniteQuery
        * @see https://www.prisma.io/docs/concepts/components/prisma-client/pagination
@@ -211,14 +264,14 @@ export const workflowRouter = router({
 
       const items = await prisma.workflowTemplate.findMany({
         select: {
-        id: true,
-        name: true,
-        description: true,
-        versions: {
-          where: { isActive: true },
-          select: { id: true, versionNumber: true },
+          id: true,
+          name: true,
+          description: true,
+          versions: {
+            where: { isActive: true },
+            select: { id: true, versionNumber: true },
+          },
         },
-      },
         // get an extra item at the end which we'll use as next cursor
         take: limit + 1,
         where: {},
@@ -242,70 +295,11 @@ export const workflowRouter = router({
       return {
         items: items.reverse(),
         nextCursor,
-      }
-    
-  }),
-
-  // ------------------
-  // WORKFLOW INSTANCES
-  // ------------------
-
-  /** Start a new Workflow Instance from a specific Template Version */
-  // TODO: protect this procedure with authentication middleware
-  startWorkflow: publicProcedure
-    .input(startWorkflowSchema)
-    .mutation(async ({ input }) => {
-      const version = await prisma.workflowTemplateVersion.findUnique({
-        where: { id: input.workflowTemplateVersionId },
-        include: {
-          templateSteps: {
-            where: { stepOrder: 1 },
-            include: { templateStepAssignees: true },
-          },
-        },
-      });
-
-      if (!version || !version.templateSteps[0]) {
-        throw new Error('Template version or initial step not found.');
-      }
-
-      const firstStep = version.templateSteps[0];
-
-      // 1. Create the workflow instance
-      const newWorkflow = await prisma.workflow.create({
-        data: {
-          workflowTemplateVersionId: version.id,
-          currentStepOrder: firstStep.stepOrder,
-          status: WorkflowStatusEnum.IN_PROGRESS,
-        },
-      });
-
-      // 2. Define runtime assignees for the first step
-      const assigneeData = firstStep.templateStepAssignees.map((a) => ({
-        workflowId: newWorkflow.id,
-        templateStepId: firstStep.id,
-        assigneeUserId: a.userId,
-      }));
-      await prisma.workflowAssignee.createMany({ data: assigneeData });
-
-      // 3. Log history
-      await prisma.history.create({
-        data: {
-          workflowId: newWorkflow.id,
-          templateStepId: firstStep.id,
-          eventType: HistoryEventEnum.WORKFLOW_STARTED,
-        },
-      });
-
-      return {
-        message: `Workflow ${newWorkflow.id} started successfully.`,
-        workflowId: newWorkflow.id,
       };
     }),
 
   /** Submit a Response for the current step of a Workflow */
-  // TODO: protectedProcedure to be implemented in a real app
-  submitResponse: publicProcedure
+  submitResponse: protectedProcedure
     .input(submitResponseSchema)
     .mutation(async ({ input }) => {
       const {
@@ -452,8 +446,8 @@ export const workflowRouter = router({
     }),
 
   /** Query the Current State and History of a specific Workflow Instance */
-  getWorkflowDetails: publicProcedure
-    .input(z.object({ workflowId: z.number().int().positive() }))
+  queryCurrentWorkflowStatusAndHistory: publicProcedure
+    .input(queryCurrentWorkflowStatusAndHistorySchema)
     .query(async ({ input }) => {
       const workflow = await prisma.workflow.findUnique({
         where: { id: input.workflowId },
@@ -531,7 +525,7 @@ export const workflowRouter = router({
       };
     }),
   /** Query the Current State and History of a specific Workflow Instance */
-  getWorkflowTemplateDetails: publicProcedure
+  queryWorkflowTemplateDetails: publicProcedure
     .input(z.object({ workflowId: z.number().int().positive() }))
     .query(async ({ input }) =>
       prisma.workflowTemplate.findUnique({

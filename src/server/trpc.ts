@@ -37,6 +37,13 @@ export const router = t.router;
  **/
 export const publicProcedure = t.procedure;
 
+/** Create a protected procedure
+ * @see https://trpc.io/docs/v11/procedures
+ **/
+
+/** Auth is stubbed in */
+export const protectedProcedure = t.procedure;
+
 /**
  * Merge multiple routers together
  * @see https://trpc.io/docs/v11/merging-routers
