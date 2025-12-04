@@ -1,3 +1,13 @@
+# Mercury Build: Take Home
+
+## Running the Project
+
+```bash
+pnpm dev
+```
+
+This is generated markdown:
+
 # Prisma + tRPC
 
 ## Features
