@@ -30,7 +30,7 @@ importers:
         specifier: ^2.0.0
         version: 2.1.1
       next:
-        specifier: ^15.3.1
+        specifier: ^15.3.6
         version: 15.5.7(@babel/core@7.28.5)(@playwright/test@1.57.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
       react:
         specifier: ^19.1.0
